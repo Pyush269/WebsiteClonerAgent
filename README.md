@@ -24,6 +24,7 @@ A conversational CLI agent — similar to Cursor or Windsurf — where you can c
 - **Beautiful Terminal UI** — Color-coded output with emojis, spinners, and formatted step indicators
 - **Automatic Browser Launch** — The generated website opens automatically in your default browser
 - **Scaler Academy Clone** — Generates a pixel-approximate clone with Header, Hero Section, and Footer
+- **Ultra-Fast Inference** — Powered by Groq's lightning-fast LPU inference engine with Llama 3.3 70B
 
 ---
 
@@ -60,7 +61,7 @@ Each iteration, the agent:
 
 - **Node.js** v18+ 
 - **npm** (comes with Node.js)
-- **OpenAI API Key** — Get one from [platform.openai.com](https://platform.openai.com/api-keys)
+- **Groq API Key** — Get one for free from [console.groq.com](https://console.groq.com/keys)
 
 ---
 
@@ -80,7 +81,7 @@ Each iteration, the agent:
 3. **Set up your API key**
    ```bash
    cp .env.example .env
-   # Edit .env and paste your OpenAI API key
+   # Edit .env and paste your Groq API key
    ```
 
 4. **Run the agent**
@@ -97,9 +98,10 @@ After starting the agent, you'll see an interactive prompt:
 ```
 ╔══════════════════════════════════════════════════════════════╗
 ║        🤖  AI Agent CLI — Website Clone Generator  🤖        ║
+║              (Powered by Groq + Llama 3.3 70B)              ║
 ╚══════════════════════════════════════════════════════════════╝
 
-✓ OpenAI API key detected
+✓ Groq API key detected
 
 You ▸ Clone the Scaler Academy website with header, hero section, and footer
 ```
@@ -157,7 +159,7 @@ ai-agent-cli/
 ├── index.js          # Main CLI agent — reasoning loop & chat interface
 ├── tools.js          # Tool definitions (writeFile, readFile, etc.)
 ├── package.json      # Dependencies and scripts
-├── .env              # Your OpenAI API key (not committed)
+├── .env              # Your Groq API key (not committed)
 ├── .env.example      # Example environment file
 ├── .gitignore        # Git ignore rules
 ├── README.md         # This file

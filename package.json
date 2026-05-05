@@ -14,12 +14,12 @@
     "cli",
     "scaler",
     "clone",
-    "openai"
+    "groq"
   ],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@google/genai": "^1.52.0",
+    "groq-sdk": "^0.18.0",
     "chalk": "^4.1.2",
     "dotenv": "^16.0.0",
     "ora": "^5.4.1"

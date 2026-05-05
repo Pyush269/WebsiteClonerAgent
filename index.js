@@ -1,21 +1,24 @@
 /**
- * index.js — Scaler Website Clone CLI Agent (Powered by Gemini)
+ * index.js — Scaler Website Clone CLI Agent (Powered by Groq)
  *
  * A conversational AI agent that runs in the terminal.
  * It follows a structured reasoning loop (START → THINK → PLAN → TOOL → OBSERVE → OUTPUT)
  * and uses tools to generate a complete clone of the Scaler Academy website.
+ *
+ * Uses Groq's ultra-fast inference API with Llama models.
  */
 
 import "dotenv/config";
-import { GoogleGenAI } from "@google/genai";
+import Groq from "groq-sdk";
 import readline from "readline";
 import chalk from "chalk";
 import ora from "ora";
 import { TOOL_MAP, TOOL_DESCRIPTIONS } from "./tools.js";
 
-// ─── Gemini Client ──────────────────────────────────────────────────
-// Automatically picks up GEMINI_API_KEY from the environment
-const ai = new GoogleGenAI({});
+// ─── Groq Client ────────────────────────────────────────────────────
+const groq = new Groq({
+  apiKey: process.env.GROQ_API_KEY,
+});
 
 // ─── Readline interface ─────────────────────────────────────────────
 const rl = readline.createInterface({
@@ -55,7 +58,7 @@ function printBanner() {
 ╔══════════════════════════════════════════════════════════════╗
 ║                                                              ║
 ║        🤖  AI Agent CLI — Website Clone Generator  🤖        ║
-║                  (Powered by Google Gemini)                  ║
+║              (Powered by Groq + Llama 3.3 70B)              ║
 ║                                                              ║
 ║   Describe a website to clone, and the agent will generate   ║
 ║   working HTML, CSS & JS files step by step.                 ║
@@ -105,7 +108,7 @@ EXAMPLE CONVERSATION:
 
 User: Clone the Scaler Academy website
 Agent: { "step": "START", "content": "The user wants me to clone the Scaler Academy website. I will create a complete website with Header, Hero Section, and Footer that visually resembles scaler.com. Let me plan this out." }
-Agent: { "step": "PLAN", "content": "I will create the following files:\n1. style.css - All styling\n2. index.html - Main HTML structure\n3. script.js - Interactive behaviors\nI'll start with the CSS file." }
+Agent: { "step": "PLAN", "content": "I will create the following files:\\n1. style.css - All styling\\n2. index.html - Main HTML structure\\n3. script.js - Interactive behaviors\\nI'll start with the CSS file." }
 Agent: { "step": "THINK", "content": "For the CSS, I need to replicate Scaler's dark navy/blue color scheme, the gradient effects, modern typography, responsive layout, and their specific component styles for navigation, hero section cards, and footer." }
 Agent: { "step": "THINK", "content": "I'll use CSS custom properties for the Scaler brand colors: primary dark (#1a1a2e), accent blue (#4a90d9), and their gradient accents. I'll also add smooth animations." }
 Agent: { "step": "TOOL", "tool_name": "writeFile", "tool_args": { "filename": "style.css", "content": "/* full CSS content here */" } }
@@ -117,9 +120,10 @@ Agent: { "step": "THINK", "content": "CSS is done. Now I need to build the HTML 
 // ─── Agent loop ─────────────────────────────────────────────────────
 
 async function runAgent(userMessage) {
-  // Gemini expects a specific message format
+  // Groq uses OpenAI-compatible chat format
   let chatHistory = [
-    { role: "user", parts: [{ text: userMessage }] }
+    { role: "system", content: SYSTEM_PROMPT },
+    { role: "user", content: userMessage },
   ];
 
   let iterationCount = 0;
@@ -134,23 +138,18 @@ async function runAgent(userMessage) {
       color: "cyan",
     }).start();
 
-    // Sleep for 13 seconds to avoid hitting the free tier rate limit of 5 Requests Per Minute for gemini-2.5-flash
-    await new Promise((resolve) => setTimeout(resolve, 13000));
-
     let parsedContent;
 
     try {
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: chatHistory,
-        config: {
-          systemInstruction: SYSTEM_PROMPT,
-          temperature: 0.2,
-          responseMimeType: "application/json",
-        }
+      const chatCompletion = await groq.chat.completions.create({
+        model: "llama-3.3-70b-versatile",
+        messages: chatHistory,
+        temperature: 0.2,
+        max_tokens: 8192,
+        response_format: { type: "json_object" },
       });
 
-      const raw = response.text;
+      const raw = chatCompletion.choices[0]?.message?.content || "{}";
       spinner.stop();
 
       try {
@@ -160,20 +159,20 @@ async function runAgent(userMessage) {
         console.log(chalk.dim(raw.substring(0, 200)));
         
         chatHistory.push({
-          role: "model",
-          parts: [{ text: raw }]
+          role: "assistant",
+          content: raw,
         });
         chatHistory.push({
           role: "user",
-          parts: [{ text: '{"step":"OBSERVE","content":"Your previous response was not valid JSON. Please respond with a single valid JSON object."}' }]
+          content: '{"step":"OBSERVE","content":"Your previous response was not valid JSON. Please respond with a single valid JSON object."}',
         });
         continue;
       }
 
       // Push assistant message
       chatHistory.push({
-        role: "model",
-        parts: [{ text: JSON.stringify(parsedContent) }]
+        role: "assistant",
+        content: JSON.stringify(parsedContent),
       });
 
       // ─── Handle each step ───
@@ -199,7 +198,7 @@ async function runAgent(userMessage) {
           logStep("OBSERVE", errMsg);
           chatHistory.push({
             role: "user",
-            parts: [{ text: JSON.stringify({ step: "OBSERVE", content: errMsg }) }]
+            content: JSON.stringify({ step: "OBSERVE", content: errMsg }),
           });
         } else {
           let result;
@@ -224,7 +223,7 @@ async function runAgent(userMessage) {
 
           chatHistory.push({
             role: "user",
-            parts: [{ text: JSON.stringify({ step: "OBSERVE", content: String(result) }) }]
+            content: JSON.stringify({ step: "OBSERVE", content: String(result) }),
           });
         }
       }
@@ -240,11 +239,25 @@ async function runAgent(userMessage) {
     } catch (error) {
       spinner.stop();
       console.log(chalk.red(`\n❌ API Error: ${error.message}`));
-      if (error.message.includes("API_KEY_INVALID")) {
-        console.log(chalk.yellow("💡 Make sure your GEMINI_API_KEY is correct in the .env file."));
+      
+      if (error.message.includes("invalid_api_key") || error.message.includes("authentication")) {
+        console.log(chalk.yellow("💡 Make sure your GROQ_API_KEY is correct in the .env file."));
         break;
       }
-      // retry on transient errors
+      
+      // Handle Rate Limit (429) gracefully
+      if (error.status === 429 || error.message.includes("429") || error.message.includes("rate_limit")) {
+        let waitTime = 15; // Groq rate limits are usually shorter
+        const retryAfter = error.headers?.["retry-after"];
+        if (retryAfter) {
+          waitTime = Math.ceil(parseFloat(retryAfter)) + 2;
+        }
+        console.log(chalk.yellow(`⏳ Rate limit hit. Waiting for ${waitTime} seconds before retrying...`));
+        await new Promise(r => setTimeout(r, waitTime * 1000));
+      } else {
+        // Wait a bit for other transient errors
+        await new Promise(r => setTimeout(r, 3000));
+      }
       continue;
     }
   }
@@ -260,14 +273,14 @@ async function main() {
   printBanner();
 
   // Validate API key
-  if (!process.env.GEMINI_API_KEY) {
-    console.log(chalk.red("❌ GEMINI_API_KEY is not set!"));
-    console.log(chalk.yellow("   Create a .env file with: GEMINI_API_KEY=AIzaSy..."));
+  if (!process.env.GROQ_API_KEY) {
+    console.log(chalk.red("❌ GROQ_API_KEY is not set!"));
+    console.log(chalk.yellow("   Create a .env file with: GROQ_API_KEY=gsk_..."));
     rl.close();
     process.exit(1);
   }
 
-  console.log(chalk.green("✓ Gemini API key detected\n"));
+  console.log(chalk.green("✓ Groq API key detected\n"));
 
   // Interactive chat loop
   while (true) {
